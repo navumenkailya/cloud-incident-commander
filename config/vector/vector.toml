@@ -1,0 +1,45 @@
+# ==========================================
+# 1. ИСТОЧНИК: Читаем логи напрямую из Docker
+# ==========================================
+[sources.docker_in]
+type = "docker_logs"
+# Указываем Vector слушать только наши конкретные облачные контейнеры
+include_containers = ["fake-aws-service", "fake-yandex-service"]
+
+# ==========================================
+# 2. ТРАНСФОРМАЦИЯ 1: Парсим JSON
+# ==========================================
+[transforms.parse_json]
+type = "remap"
+inputs = ["docker_in"]
+# Vector использует свой язык скриптов VRL (Vector Remap Language).
+# Эта строчка берет текстовое поле .message и парсит его как JSON объект.
+source = '''
+. = parse_json!(.message)
+'''
+
+# ==========================================
+# 3. ТРАНСФОРМАЦИЯ 2: Фильтруем только ошибки
+# ==========================================
+[transforms.filter_errors]
+type = "filter"
+inputs = ["parse_json"]
+# Пропускаем дальше только те логи, где статус 500 или уровень ERROR/CRITICAL
+condition = '.status == 500 || .level == "ERROR" || .level == "CRITICAL"'
+
+# ==========================================
+# 4. ПРИЁМНИК (SINK): Выводим результат в консоль Vector
+# ==========================================
+#[sinks.console_out]
+#type = "console"
+#inputs = ["filter_errors"]
+#encoding.codec = "json"
+
+# ==========================================
+# 4. ПРИЁМНИК (SINK): Отправляем ошибки в наш ИИ-сервис
+# ==========================================
+[sinks.http_out]
+type = "http"
+inputs = ["filter_errors"]
+uri = "http://core-aiops:8000/webhook"
+encoding.codec = "json"
