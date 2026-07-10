@@ -1,0 +1,58 @@
+version: '3.8'
+
+# 1. Наши изолированные облачные сети
+networks:
+  aws-network:
+    driver: bridge
+  yandex-network:
+    driver: bridge
+  management-network:
+    driver: bridge
+
+services:
+  # Наш ИИ и База данных (уже знакомые тебе)
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: sre-postgres-db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: supersecretpassword
+      POSTGRES_DB: incident_db
+    ports:
+      - "5432:5432"
+    networks:
+      - management-network
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  ollama-ai:
+    image: ollama/ollama:latest
+    container_name: sre-ollama-ai
+    ports:
+      - "11434:11434"
+    networks:
+      - management-network
+    volumes:
+      - ollama_data:/root/.ollama
+
+  # ========================================================
+  # НОВЫЕ СЕРВИСЫ: Наши фейковые облака
+  # ========================================================
+
+  aws-service:
+    build: ./services/aws-app
+    container_name: fake-aws-service
+    restart: always
+    networks:
+      - aws-network # Подключаем строго к изолированной сети AWS
+
+  yandex-service:
+    build: ./services/yandex-app
+    container_name: fake-yandex-service
+    restart: always
+    networks:
+      - yandex-network # Подключаем строго к изолированной сети Yandex
+
+volumes:
+  pgdata:
+  ollama_data:
